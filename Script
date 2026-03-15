@@ -1,0 +1,223 @@
+local PRIVATE_MODEL_ID = 114376019912598
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local StarterGui = game:GetService("StarterGui")
+local TweenService = game:GetService("TweenService")
+
+local Player = Players.LocalPlayer
+local Character = Player.Character or Player.CharacterAdded:Wait()
+local Humanoid = Character:WaitForChild("Humanoid")
+
+local WALK_SPEED = 8.5
+local RUN_SPEED = 27
+
+local SPEED_TRANSITION_TIME = 0.25
+local MOVE_CONFIRM_DELAY = 0.12
+local ANIM_COOLDOWN = 0.1
+
+local RunMode = false
+local UsingAbility = false
+local currentAnim
+local lastAnimTime = 0
+local movingSince = 0
+local speedTween
+
+StarterGui:SetCore("SendNotification",{
+	Title = "Eunoia",
+	Text = "Menu de animações carregado",
+	Duration = 6
+})
+
+if not getgenv().Animator6DLoadedPro then
+	loadstring(game:HttpGet(
+		"https://raw.githubusercontent.com/gObl00x/Stuff/refs/heads/main/Animator6D.lua"
+	))()
+	repeat task.wait() until getgenv().Animator6DLoadedPro
+end
+
+local model = game:GetObjects("rbxassetid://"..PRIVATE_MODEL_ID)[1]
+assert(model,"Failed to load")
+
+local Animations = {}
+local function scan(o)
+	if o:IsA("KeyframeSequence") then
+		table.insert(Animations,o)
+	end
+	for _,c in ipairs(o:GetChildren()) do
+		scan(c)
+	end
+end
+scan(model)
+
+local IdleKF,WalkKF,RunKF,JumpKF,SitKF,SlashKF,MassInfectionKF,EntanglementKF,UnstableEyeKF,RejuvenetteTheRottenKF,ExecutionKF,IntroKF,StunnedStartKF,StunnedIdleKF,StunnedEndingKF
+IdleKF = Animations[6]
+WalkKF = Animations[7]
+RunKF = Animations[3]
+
+for _,a in ipairs(Animations) do
+	local n = a.Name:lower()
+	if n:find("jump") then JumpKF = a
+	elseif n:find("sit") then SitKF = a
+	elseif n:find("slash") then SlashKF = a
+	elseif n:find("mass infection") then MassInfectionKF = a
+	elseif n:find("entanglement") then EntanglementKF = a
+	elseif n:find("unstable eye") then UnstableEyeKF = a
+	elseif n:find("rejuvenette the rotten") then RejuvenetteTheRottenKF = a
+	elseif n:find("execution") then ExecutionKF = a
+	elseif n:find("intro") then IntroKF = a
+	elseif n:find("stunnedstart") then StunnedStartKF = a
+	elseif n:find("stunnedidle") then StunnedIdleKF = a
+	elseif n:find("stunnedending") then StunnedEndingKF = a
+	end
+end
+
+local function SmoothSpeed(target)
+	if speedTween then speedTween:Cancel() end
+	speedTween = TweenService:Create(
+		Humanoid,
+		TweenInfo.new(SPEED_TRANSITION_TIME,Enum.EasingStyle.Quad,Enum.EasingDirection.Out),
+		{WalkSpeed = target}
+	)
+	speedTween:Play()
+end
+
+local function ApplySpeed()
+	SmoothSpeed(RunMode and RUN_SPEED or WALK_SPEED)
+end
+
+local function Play(kf,looped)
+	if currentAnim == kf then return end
+	if tick()-lastAnimTime < ANIM_COOLDOWN then return end
+	lastAnimTime = tick()
+	getgenv().Animator6DStop()
+	task.wait(0.03)
+	getgenv().Animator6D(kf,1,looped~=false)
+	currentAnim = kf
+end
+
+local function getAnimLength(kf)
+	local animLength = 0
+	for _, keyframe in ipairs(kf:GetChildren()) do
+		if keyframe:IsA("Keyframe") then
+			animLength = math.max(animLength, keyframe.Time)
+		end
+	end
+	return animLength
+end
+
+local function PlayAbility(kf, audioId)
+	if UsingAbility then return end
+	UsingAbility = true
+	local originalSpeed = Humanoid.WalkSpeed
+	Humanoid.WalkSpeed = 0
+	Play(kf, false)
+	local sound
+	if audioId then
+		sound = Instance.new("Sound")
+		sound.Parent = Character:WaitForChild("HumanoidRootPart")
+		sound.SoundId = "rbxassetid://" .. audioId
+		sound:Play()
+	end
+	local animLength = getAnimLength(kf)
+	task.wait(animLength)
+	if sound then
+		sound:Stop()
+		sound:Destroy()
+	end
+	Humanoid.WalkSpeed = originalSpeed
+	UsingAbility = false
+	Play(IdleKF, true)
+end
+
+local function PlayCombo()
+	if UsingAbility then return end
+	UsingAbility = true
+	local originalSpeed = Humanoid.WalkSpeed
+	Humanoid.WalkSpeed = 0
+
+	Play(StunnedStartKF, false)
+	local startLength = getAnimLength(StunnedStartKF)
+	task.wait(startLength)
+
+	Play(StunnedIdleKF, true)
+	task.wait(2)
+	getgenv().Animator6DStop()
+
+	Play(StunnedEndingKF, false)
+	local endLength = getAnimLength(StunnedEndingKF)
+	task.wait(endLength)
+
+	Humanoid.WalkSpeed = originalSpeed
+	UsingAbility = false
+	Play(IdleKF, true)
+end
+
+local function SetRunMode(v)
+	RunMode = v
+	ApplySpeed()
+end
+
+UserInputService.InputBegan:Connect(function(i,gp)
+	if gp then return end
+	if i.KeyCode==Enum.KeyCode.LeftShift or i.KeyCode==Enum.KeyCode.RightShift then
+		SetRunMode(not RunMode)
+	elseif i.KeyCode == Enum.KeyCode.T or i.UserInputType == Enum.UserInputType.MouseButton1 then
+		PlayAbility(SlashKF, 134247097670166)
+	elseif i.KeyCode == Enum.KeyCode.Q then
+		PlayAbility(MassInfectionKF, 81790848432358)
+	elseif i.KeyCode == Enum.KeyCode.E then
+		PlayAbility(EntanglementKF, 136288842931918)
+	elseif i.KeyCode == Enum.KeyCode.R then
+		PlayAbility(UnstableEyeKF, 132444032352118)
+	elseif i.KeyCode == Enum.KeyCode.Y then
+		PlayAbility(RejuvenetteTheRottenKF, nil)
+	elseif i.KeyCode == Enum.KeyCode.Z then
+		PlayAbility(ExecutionKF, 134932739654019)
+	elseif i.KeyCode == Enum.KeyCode.One then
+		PlayAbility(IntroKF, 128175322418725)
+	elseif i.KeyCode == Enum.KeyCode.Two then
+		PlayCombo()
+	end
+end)
+
+Humanoid.WalkSpeed = WALK_SPEED
+
+RunService.RenderStepped:Connect(function()
+	if UsingAbility then
+		return
+	end
+
+	local moving = Humanoid.MoveDirection.Magnitude > 0
+
+	if Humanoid.Sit and SitKF then
+		Play(SitKF,true)
+		return
+	end
+
+	if Humanoid.FloorMaterial==Enum.Material.Air and JumpKF then
+		Play(JumpKF,false)
+		return
+	end
+
+	if moving then
+		if movingSince==0 then movingSince=tick() end
+		if tick()-movingSince>=MOVE_CONFIRM_DELAY then
+			if RunMode and RunKF then
+				Play(RunKF,true)
+			else
+				Play(WalkKF,true)
+			end
+		end
+	else
+		movingSince=0
+		Play(IdleKF,true)
+	end
+end)
+
+Player.CharacterAdded:Connect(function(c)
+	Character=c
+	Humanoid=c:WaitForChild("Humanoid")
+	Humanoid.WalkSpeed=WALK_SPEED
+end)
