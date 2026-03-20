@@ -221,3 +221,5 @@ Player.CharacterAdded:Connect(function(c)
 	Humanoid=c:WaitForChild("Humanoid")
 	Humanoid.WalkSpeed=WALK_SPEED
 end)
+
+-- This is a Slop code,Brother
